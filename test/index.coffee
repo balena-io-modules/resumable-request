@@ -113,4 +113,3 @@ describe 'resumable', ->
 			expect(progressEvents[progressEvents.length - 1]).to.have.deep.property('size.total').that.equals(TEST_FILE_LENGTH)
 			expect(progressEvents[progressEvents.length - 1]).to.have.deep.property('size.transferred').that.equals(TEST_FILE_LENGTH)
 			done()
-		.pipe(fs.createWriteStream('/dev/null'))
