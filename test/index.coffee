@@ -4,6 +4,7 @@ progress = require 'request-progress'
 Range = require('http-range').Range
 resumable = require '../'
 { expect } = require 'chai'
+request = require 'request'
 
 TEST_PORT = process.env.TEST_PORT ? 5000
 TEST_FILE = './test/test.html'
@@ -40,7 +41,7 @@ describe 'resumable', ->
 
 	it 'should stream the whole response', (done) ->
 		chunks = []
-		resumable({ url: "http://localhost:#{TEST_PORT}/" })
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
 		.on 'data', (data) ->
 			chunks.push(data)
 		.on 'end', ->
@@ -48,7 +49,7 @@ describe 'resumable', ->
 			done()
 
 	it 'should fail if maxRetries are exceeded', (done) ->
-		resumable({ url: "http://localhost:#{TEST_PORT}/", maxRetries: 2 })
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/" }, { maxRetries: 2 })
 		.on 'error', ->
 			done()
 		.on 'end', ->
@@ -56,7 +57,7 @@ describe 'resumable', ->
 
 	it 'should be compatible with request-progress', (done) ->
 		progressEvents = []
-		progress resumable({ url: "http://localhost:#{TEST_PORT}/" }), { throttle: 0 }
+		progress resumable(request, { url: "http://localhost:#{TEST_PORT}/" }), { throttle: 0 }
 		.on 'progress', (prog) ->
 			# "cheap" deep copy
 			# otherwise all progress events are the same
