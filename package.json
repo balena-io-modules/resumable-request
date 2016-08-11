@@ -1,0 +1,20 @@
+{
+  "name": "resumable-request",
+  "version": "0.0.1",
+  "scripts": {
+    "pretest": "./node_modules/.bin/resin-lint index.coffee test/",
+    "test": "./node_modules/.bin/mocha --compilers coffee:coffee-script/register"
+  },
+  "dependencies": {
+    "through": "~2.3.8"
+  },
+  "devDependencies": {
+    "chai": "~3.5.0",
+    "coffee-script": "~1.10.0",
+    "http-range": "~1.0.0",
+    "mocha": "~3.0.2",
+    "request": "~2.74.0",
+    "request-progress": "~2.0.1",
+    "resin-lint": "~1.4.0"
+  }
+}
