@@ -52,9 +52,9 @@ class Resumable
 		else if @bytesRead == @contentLength
 			@stream.end()
 		else if @bytesRead > @contentLength
-			@stream.emit('error', new Error('resumable received more bytes than expected'))
+			@stream.emit('error', new Error('Resumable received more bytes than expected'))
 		else if @retries >= @maxRetries
-			@stream.emit('error', new Error('maximum retries exceeded.'))
+			@stream.emit('error', new Error('Maximum retries exceeded.'))
 		else
 			@retries += 1
 			@resume()
