@@ -1,9 +1,15 @@
 {
   "name": "resumable-request",
   "version": "0.0.1",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/resin-io-modules/resumable-request"
+  },
   "scripts": {
     "pretest": "./node_modules/.bin/resin-lint index.coffee test/",
-    "test": "./node_modules/.bin/mocha --compilers coffee:coffee-script/register"
+    "test": "./node_modules/.bin/mocha --compilers coffee:coffee-script/register",
+    "prepublish": "./node_modules/.bin/coffee -c index.coffee"
   },
   "dependencies": {
     "through": "~2.3.8"
