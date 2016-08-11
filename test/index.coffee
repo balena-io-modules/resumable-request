@@ -5,6 +5,7 @@ Range = require('http-range').Range
 resumable = require '../'
 { expect } = require 'chai'
 request = require 'request'
+url = require 'url'
 
 TEST_PORT = process.env.TEST_PORT ? 5000
 TEST_FILE = './test/test.html'
@@ -24,7 +25,11 @@ brokenServer = http.createServer (req, res) ->
 	else
 		opts.start = 0
 		opts.end = TEST_BROKEN_RESPONSE_SIZE - 1
-	res.setHeader('Content-length', TEST_FILE_LENGTH - opts.start)
+	qs = url.parse(req.url, true).query
+	if not qs.noContentLength?
+		res.setHeader('Content-length', TEST_FILE_LENGTH - opts.start)
+	if qs.failAt? and opts.start >= qs.failAt <= opts.end
+		res.statusCode = 404
 	fs.createReadStream(TEST_FILE, opts).pipe(res)
 
 describe 'resumable', ->
@@ -54,6 +59,44 @@ describe 'resumable', ->
 			done()
 		.on 'end', ->
 			done(new Error('end should not have been called'))
+
+	it 'should fail if no content-length is emitted', (done) ->
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/?noContentLength=1" })
+		.on 'error', ->
+			done()
+		.on 'end', ->
+			done(new Error('end should not have been called'))
+
+	it 'should fail if some of the resumed requests return status code >= 400', (done) ->
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/?failAt=#{TEST_FILE_LENGTH / 2}" })
+		.on 'error', ->
+			done()
+		.on 'end', ->
+			done(new Error('end should not have been called'))
+
+	it 'should emit one "request" event', (done) ->
+		requestEvents = []
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
+		.on 'request', (req) ->
+			requestEvents.push(req)
+		.on 'error', (e) ->
+			done(e)
+		.on 'end', ->
+			expect(requestEvents.length).to.equal(1)
+			expect(requestEvents).to.have.property(0).that.is.an.instanceof(http.ClientRequest)
+			done()
+
+	it 'should emit one "response" event', (done) ->
+		responseEvents = []
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
+		.on 'response', (res) ->
+			responseEvents.push(res)
+		.on 'error', (e) ->
+			done(e)
+		.on 'end', ->
+			expect(responseEvents.length).to.equal(1)
+			expect(responseEvents).to.have.property(0).that.is.an.instanceof(http.IncomingMessage)
+			done()
 
 	it 'should be compatible with request-progress', (done) ->
 		progressEvents = []
