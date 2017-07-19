@@ -145,7 +145,7 @@ describe 'resumable', ->
 			progressEvents.push(prog)
 		.on 'end', ->
 			expect(progressEvents.length).to.be.greaterThan(0)
-			expect(progressEvents[0]).to.have.property('percentage').greaterThan(0)
+			expect(progressEvents[0]).to.have.property('percentage').that.equals(0)
 			expect(progressEvents[progressEvents.length - 1]).to.have.property('percentage').that.equals(100)
 			expect(progressEvents[progressEvents.length - 1]).to.have.deep.property('size.total').that.equals(TEST_FILE_LENGTH)
 			expect(progressEvents[progressEvents.length - 1]).to.have.deep.property('size.transferred').that.equals(TEST_FILE_LENGTH)

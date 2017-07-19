@@ -12,6 +12,7 @@
     "prepublish": "./node_modules/.bin/coffee -c index.coffee"
   },
   "dependencies": {
+    "lodash.throttle": "^4.1.1",
     "readable-stream": "^2.3.3"
   },
   "devDependencies": {

@@ -1,4 +1,5 @@
 stream = require 'readable-stream'
+throttle = require 'lodash.throttle'
 
 module.exports = (requestModule, requestOpts, opts) ->
 	return new ResumableRequest(requestModule, requestOpts, opts)
@@ -14,21 +15,6 @@ cloneResponse = (response) ->
 	[ 'headers', 'httpVersion', 'method', 'rawHeaders', 'statusCode', 'statusMessage' ].forEach (prop) ->
 		s[prop] = response[prop]
 	return s
-
-throttle = (fn, interval) ->
-	timeoutId = null
-	cancel = ->
-		return if not timeoutId?
-		timeoutId = clearTimeout(timeoutId)
-	apply = ->
-		cancel()
-		fn()
-	throttledFn = ->
-		return if timeoutId?
-		timeoutId = setTimeout(apply, interval)
-	throttledFn.apply = apply
-	throttledFn.cancel = cancel
-	return throttledFn
 
 wrapLegacyStream = (s) ->
 	new stream.Readable().wrap(s)
@@ -75,8 +61,9 @@ class ResumableRequest extends stream.Readable
 		doEnd = =>
 			@request.abort()
 			@_retry.cancel()
+			@_reportProgress()
+			@_reportProgress.flush()
 			@_reportProgress.cancel()
-			@_reportProgress.apply()
 			@emit('end')
 			if not @error?
 				@emit('complete')
@@ -94,7 +81,7 @@ class ResumableRequest extends stream.Readable
 		size: { transferred: @bytesRead, total: @bytesTotal }
 
 	_reportProgress: (progress = {}) =>
-		@emit('progress', Object.assign @progress(), progress)
+		@emit('progress', Object.assign(@progress(), progress))
 
 	# Sends the requests and sets up listeners in order
 	# to be able to resume.
@@ -138,6 +125,8 @@ class ResumableRequest extends stream.Readable
 	_follow: (response) ->
 		if not @response?
 			@bytesTotal ?= parseInt(response.headers['content-length'])
+			@_reportProgress()
+			@_reportProgress.flush()
 			@response = cloneResponse(response).on('data', @push.bind(this))
 			@emit('response', @response)
 
