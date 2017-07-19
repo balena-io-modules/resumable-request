@@ -35,13 +35,17 @@ class ResumableRequest extends stream.Readable
 		@_retry = throttle(@_retry.bind(this), opts.retryInterval ? 1000)
 		@_reportProgress = throttle(@_reportProgress.bind(this), opts.progressInterval ? 1000)
 
-		@on 'pipe', ->
+		@on 'pipe', =>
 			# request can be written to when uploading a resource to a URL.
 			# We do not support that -- resumable request can only be used
 			# to *download* a resource, i.e. only the response is resumable.
-			# piping will fail as soon as the stream gets going because we don't
-			# implement Writable but it's better to fail early.
-			throw new Error('ResumableRequest is not writable.')
+			# piping will fail with a not-so-obvious error as soon as the stream
+			# gets going because we don't implement Writable, so it's detect this
+			# and emit a more appropriate error.
+			@error = new Error('ResumableRequest is not writable')
+			# have to abort asynchronously to allow client code to register 'error' handlers
+			process.nextTick =>
+				@_retry()
 
 		@_request()
 

@@ -80,13 +80,6 @@ describe 'resumable', ->
 		.on 'close', ->
 			done()
 
-	it 'should fail if treated as writable stream', (done) ->
-		f = ->
-			fs.createReadStream(TEST_FILE)
-			.pipe(resumable(request, { url: "http://localhost:#{TEST_PORT}/" }))
-		expect(f).to.throw(Error)
-		done()
-
 	expectError = (str, done, fn) ->
 		error = null
 		fn()
@@ -95,6 +88,11 @@ describe 'resumable', ->
 		.on 'end', ->
 			expect(error.toString()).to.contain(str)
 			done()
+
+	it 'should fail if treated as writable stream', (done) ->
+		expectError 'ResumableRequest is not writable', done, ->
+			fs.createReadStream(TEST_FILE)
+			.pipe(resumable(request, { url: "http://localhost:#{TEST_PORT}/" }))
 
 	it 'should fail if maxRetries are exceeded', (done) ->
 		expectError 'Maximum retries exceeded', done, ->
