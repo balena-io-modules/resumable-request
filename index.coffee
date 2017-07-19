@@ -141,23 +141,21 @@ class ResumableRequest extends stream.Readable
 	# Decide whether to resume downloading based on number
 	# of bytes downloaded and maximum retries.
 	_retry: ->
-		try
-			if @error?
-				throw @error # we have already emitted an unrecoverable error
-			if @response? and not @bytesTotal
-				throw new Error('Cannot resume without Content-Length response header')
-			if @response? and @response.headers['accept-ranges']?.toLowerCase() != 'bytes'
-				throw new Error('Server does not support Byte Serving')
-			if @bytesTotal and @bytesRead > @bytesTotal
-				throw new Error('Received more bytes than expected!')
-			if @retries >= @maxRetries
-				throw new Error('Maximum retries exceeded')
-		catch err
-			@error = err
-			@emit('error', err)
-			@abort()
+		if @error?
+			# we already have an unrecoverable error
+		else if @response? and not @bytesTotal
+			@error = new Error('Cannot resume without Content-Length response header')
+		else if @response? and @response.headers['accept-ranges']?.toLowerCase() != 'bytes'
+			@error = new Error('Server does not support Byte Serving')
+		else if @bytesTotal and @bytesRead > @bytesTotal
+			@error = new Error('Received more bytes than expected!')
+		else if @retries >= @maxRetries
+			@error = new Error('Maximum retries exceeded')
+		else
+			@retries += 1
+			@emit('retry', @progress())
+			@_request()
 			return
 
-		@retries += 1
-		@emit('retry', @progress())
-		@_request()
+		@emit('error', @error)
+		@abort()
