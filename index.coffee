@@ -51,7 +51,7 @@ class ResumableRequest extends stream.Readable
 
 	abort: ->
 		@emit('abort')
-		@_end()
+		@destroy()
 
 	push: (data, encoding) ->
 		@retries = 0 # we got some data, reset number of retries
@@ -59,8 +59,8 @@ class ResumableRequest extends stream.Readable
 		@_reportProgress()
 		return super(data, encoding)
 
-	_end: ->
-		return if @ended
+	_destroy: (err, cb) ->
+		return cb(err) if @ended
 		@ended = true
 		doEnd = =>
 			@request.abort()
@@ -68,6 +68,7 @@ class ResumableRequest extends stream.Readable
 			@_reportProgress()
 			@_reportProgress.flush()
 			@_reportProgress.cancel()
+			cb(err)
 			@emit('end')
 			if not @error?
 				@emit('complete')
@@ -124,7 +125,7 @@ class ResumableRequest extends stream.Readable
 			if errored or (@bytesTotal? and @bytesRead < @bytesTotal)
 				@_retry()
 			else
-				@_end() # received complete response
+				@destroy() # received complete response
 
 	_follow: (response) ->
 		if not @response?
