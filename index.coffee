@@ -102,8 +102,7 @@ class ResumableRequest extends stream.Readable
 			@requestOpts.headers.range = "bytes=#{@bytesRead}-"
 
 		initial = @request is null
-		aborted = false
-		errored = false
+		failed = false
 
 		@request = @requestModule(@requestOpts)
 		.once 'request', (reqObj) =>
@@ -115,14 +114,12 @@ class ResumableRequest extends stream.Readable
 				@error = new Error("Request failed with status code #{response.statusCode}")
 				@_retry() # will abort the request
 		.on 'error', (err) =>
-			errored = true
+			failed = true
 			@emit('socketError', err)
-			if aborted
-				@_retry()
-		.once 'abort', ->
-			aborted = true
+			@_retry()
 		.once 'complete', =>
-			if errored or (@bytesTotal? and @bytesRead < @bytesTotal)
+			return if failed # we've already triggered a retry
+			if @bytesTotal? and @bytesRead < @bytesTotal
 				@_retry()
 			else
 				@destroy() # received complete response
