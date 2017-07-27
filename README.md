@@ -20,7 +20,7 @@ var request = require('request');
 var resumable = require('resumable-request');
 
 resumable(request, { url: "http://example.org/" })
-.pipe(fs.createWriteStream('out.txt'));
+  .pipe(fs.createWriteStream('out.txt'));
 ```
 
 ## Documentation
@@ -52,7 +52,7 @@ var baseResumable = resumable.defaults({
 // You may override defaults inline with the request. The following will
 // report progress every 500ms, instead of 2000ms that was specified above.
 baseResumable(request, { url: "http://example.org/" }, { progressInterval: 500 })
-.pipe(fs.createWriteStream('out.txt'));
+  .pipe(fs.createWriteStream('out.txt'));
 ```
 
 ### `progress` Event
@@ -73,10 +73,10 @@ For example:
 
 ```js
 resumable(request, { url: "http://example.org/" }, { progressInterval: 2000 })
-.on('progress', function onProgress(state) {
-  console.log(state);
-})
-.pipe(fs.createWriteStream('out.txt'));
+  .on('progress', function onProgress(state) {
+    console.log(state);
+  })
+  .pipe(fs.createWriteStream('out.txt'));
 ```
 
 ## Why does resumable need "request" module as an argument?
