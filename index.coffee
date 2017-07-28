@@ -41,7 +41,7 @@ class ResumableRequest extends stream.Readable
 			# We do not support that -- resumable request can only be used
 			# to *download* a resource, i.e. only the response is resumable.
 			# piping will fail with a not-so-obvious error as soon as the stream
-			# gets going because we don't implement Writable, so it's detect this
+			# gets going because we don't implement Writable, so detect this
 			# and emit a more appropriate error.
 			@error = new Error('ResumableRequest is not writable')
 			# have to abort asynchronously to allow client code to register 'error' handlers
@@ -134,6 +134,10 @@ class ResumableRequest extends stream.Readable
 
 	_follow: (response) ->
 		if not @response?
+			# Create a response "proxy" for the first response by wrapping it in a
+			# custom PassThrough stream, copying interesting attributes such as
+			# statusCode, headers, etc. This is needed because we only emit one
+			# 'response' event where client code can attach listeners on.
 			@bytesTotal ?= parseInt(response.headers['content-length'])
 			@_reportProgress()
 			@_reportProgress.flush()
