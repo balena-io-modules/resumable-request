@@ -51,7 +51,7 @@ class ResumableRequest extends stream.Readable
 
 	abort: ->
 		@emit('abort')
-		@destroy()
+		@destroy(@error)
 
 	push: (data, encoding) ->
 		@retries = 0 # we got some data, reset number of retries
@@ -62,16 +62,24 @@ class ResumableRequest extends stream.Readable
 	_destroy: (err, cb) ->
 		return cb(err) if @ended
 		@ended = true
-		doEnd = =>
+		# make sure to cleanly abort or detroy the underlying
+		# request as appropriate immediately.
+		if err
 			@request.abort()
+		else
+			@request.destroy()
+		doEnd = =>
 			@_retry.cancel()
 			@_reportProgress()
 			@_reportProgress.flush()
 			@_reportProgress.cancel()
 			cb(err)
-			@emit('end')
-			if not @error?
-				@emit('complete')
+			# `cb(err)` will emit the error on next tick, so schedule emittance
+			# of 'end' on next tick as well to preserve event order.
+			process.nextTick =>
+				@emit('end')
+				if not err
+					@emit('complete')
 		if @response?
 			@response.end(doEnd)
 		else
@@ -139,6 +147,8 @@ class ResumableRequest extends stream.Readable
 	# Decide whether to resume downloading based on number
 	# of bytes downloaded and maximum retries.
 	_retry: ->
+		return if @ended
+
 		if @error?
 			# we already have an unrecoverable error
 		else if @response? and not @bytesTotal
@@ -155,5 +165,4 @@ class ResumableRequest extends stream.Readable
 			@_request()
 			return
 
-		@emit('error', @error)
 		@abort()
