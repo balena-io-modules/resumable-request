@@ -32,8 +32,8 @@ class ResumableRequest extends stream.Readable
 		@retries = 0
 		@maxRetries = opts.maxRetries ? 10
 
-		@_retry = throttle(@_retry.bind(this), opts.retryInterval ? 1000)
-		@_reportProgress = throttle(@_reportProgress.bind(this), opts.progressInterval ? 1000)
+		@_retry = throttle(@_retry.bind(this), opts.retryInterval ? 1000, leading: false)
+		@_reportProgress = throttle(@_reportProgress.bind(this), opts.progressInterval ? 1000, leading: false)
 
 		@on 'pipe', =>
 			# request can be written to when uploading a resource to a URL.
