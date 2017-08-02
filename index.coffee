@@ -1,12 +1,17 @@
 stream = require 'readable-stream'
 throttle = require 'lodash.throttle'
 
+# use the same module as request.js, to preserve behaviour.
+# Object.assign() doesn't fit, because it copies `undefined`
+# props as well, whereas we'd rather not.
+extend = require 'extend'
+
 module.exports = (requestModule, requestOpts, opts) ->
 	return new ResumableRequest(requestModule, requestOpts, opts)
 
 module.exports.defaults = (defaults = {}) ->
 	(requestModule, requestOpts, opts) ->
-		opts = Object.assign {}, defaults, opts
+		opts = extend {}, defaults, opts
 		return new ResumableRequest(requestModule, requestOpts, opts)
 
 cloneResponse = (response) ->
