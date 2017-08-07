@@ -1,16 +1,19 @@
 http = require 'http'
 fs = require 'fs'
-progress = require 'request-progress'
 Range = require('http-range').Range
-resumable = require '../'
 { expect } = require 'chai'
-request = require 'request'
 url = require 'url'
+stream = require 'readable-stream'
+
+# we're emulating a flaky connection by simply not sending data from the test
+# server down the socket. no need to wait for ages, so specify tiny timeouts.
+request = require('request').defaults(timeout: 100)
+resumable = require('../').defaults(retryInterval: 100, maxRetries: 2)
 
 TEST_PORT = process.env.TEST_PORT ? 5000
 TEST_FILE = './test/test.html'
 TEST_FILE_LENGTH = 128086
-TEST_BROKEN_RESPONSE_SIZE = 20000
+TEST_BROKEN_RESPONSE_SIZE = 40000
 
 # returns only TEST_BROKEN_RESPONSE_SIZE bytes per request
 # to test resumable downloads
@@ -26,11 +29,18 @@ brokenServer = http.createServer (req, res) ->
 		opts.start = 0
 		opts.end = TEST_BROKEN_RESPONSE_SIZE - 1
 	qs = url.parse(req.url, true).query
+	if qs.hang?
+		return # hang forever; will cause socket timeout
 	if not qs.noContentLength?
 		res.setHeader('Content-length', TEST_FILE_LENGTH - opts.start)
+	if not qs.noByteServing?
+		res.setHeader('Accept-Ranges', 'Bytes')
 	if qs.failAt? and opts.start >= qs.failAt <= opts.end
 		res.statusCode = 404
-	fs.createReadStream(TEST_FILE, opts).pipe(res)
+	fs.createReadStream(TEST_FILE, opts).on 'data', (data) ->
+		if not data?
+			return # hang forever; will cause socket timeout
+		res.write data
 
 describe 'resumable', ->
 	before ->
@@ -53,26 +63,52 @@ describe 'resumable', ->
 			expect(Buffer.concat(chunks)).to.eql(fs.readFileSync(TEST_FILE))
 			done()
 
-	it 'should fail if maxRetries are exceeded', (done) ->
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/" }, { maxRetries: 2 })
-		.on 'error', ->
-			done()
+	it 'should stream the inner response', (done) ->
+		chunks = []
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
+		.on 'response', (response) ->
+			response
+			.on 'data', (data) ->
+				chunks.push(data)
 		.on 'end', ->
-			done(new Error('end should not have been called'))
+			expect(Buffer.concat(chunks)).to.eql(fs.readFileSync(TEST_FILE))
+			done()
+
+	it 'should pipe the whole response', (done) ->
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
+		.pipe(fs.createWriteStream('/dev/null'))
+		.on 'close', ->
+			done()
+
+	expectError = (str, done, fn) ->
+		error = null
+		fn()
+		.on 'error', (e) ->
+			error = e
+		.on 'end', ->
+			expect(error.toString()).to.contain(str)
+			done()
+
+	it 'should fail if treated as writable stream', (done) ->
+		expectError 'ResumableRequest is not writable', done, ->
+			fs.createReadStream(TEST_FILE)
+			.pipe(resumable(request, { url: "http://localhost:#{TEST_PORT}/" }))
+
+	it 'should fail if maxRetries are exceeded', (done) ->
+		expectError 'Maximum retries exceeded', done, ->
+			resumable(request, { url: "http://localhost:#{TEST_PORT}/?hang=1" })
 
 	it 'should fail if no content-length is emitted', (done) ->
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/?noContentLength=1" })
-		.on 'error', ->
-			done()
-		.on 'end', ->
-			done(new Error('end should not have been called'))
+		expectError 'Cannot resume without Content-Length response header', done, ->
+			resumable(request, { url: "http://localhost:#{TEST_PORT}/?noContentLength=1" })
+
+	it 'should fail if no accept-ranges is emitted', (done) ->
+		expectError 'Server does not support Byte Serving', done, ->
+			resumable(request, { url: "http://localhost:#{TEST_PORT}/?noByteServing=1" })
 
 	it 'should fail if some of the resumed requests return status code >= 400', (done) ->
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/?failAt=#{TEST_FILE_LENGTH / 2}" })
-		.on 'error', ->
-			done()
-		.on 'end', ->
-			done(new Error('end should not have been called'))
+		expectError 'Request failed with status code 404', done, ->
+			resumable(request, { url: "http://localhost:#{TEST_PORT}/?failAt=#{TEST_FILE_LENGTH / 2}" })
 
 	it 'should emit one "request" event', (done) ->
 		requestEvents = []
@@ -95,21 +131,20 @@ describe 'resumable', ->
 			done(e)
 		.on 'end', ->
 			expect(responseEvents.length).to.equal(1)
-			expect(responseEvents).to.have.property(0).that.is.an.instanceof(http.IncomingMessage)
+			expect(responseEvents).to.have.property(0).that.is.an.instanceof(stream.Readable)
+			[ 'headers', 'httpVersion', 'method', 'rawHeaders', 'statusCode', 'statusMessage' ].forEach (prop) ->
+				expect(responseEvents[0]).to.have.property(prop)
 			done()
 
-	it 'should be compatible with request-progress', (done) ->
+	it 'should report progress', (done) ->
 		progressEvents = []
-		progress resumable(request, { url: "http://localhost:#{TEST_PORT}/" }), { throttle: 0 }
+		resumable(request, { url: "http://localhost:#{TEST_PORT}/" }, { progressInterval: 10 })
 		.on 'progress', (prog) ->
-			# "cheap" deep copy
-			# otherwise all progress events are the same
-			copyProg = JSON.parse(JSON.stringify(prog))
-			progressEvents.push(copyProg)
+			progressEvents.push(prog)
 		.on 'end', ->
 			expect(progressEvents.length).to.be.greaterThan(0)
-			expect(progressEvents[0]).to.have.property('percentage').greaterThan(0)
-			expect(progressEvents[progressEvents.length - 1]).to.have.property('percentage').that.equals(1)
+			expect(progressEvents[0]).to.have.property('percentage').that.equals(0)
+			expect(progressEvents[progressEvents.length - 1]).to.have.property('percentage').that.equals(100)
 			expect(progressEvents[progressEvents.length - 1]).to.have.deep.property('size.total').that.equals(TEST_FILE_LENGTH)
 			expect(progressEvents[progressEvents.length - 1]).to.have.deep.property('size.transferred').that.equals(TEST_FILE_LENGTH)
 			done()
