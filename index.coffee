@@ -57,7 +57,7 @@ class ResumableRequest extends stream.Readable
 		@emit('abort')
 		@destroy(@error)
 
-	push: (data, encoding) ->
+	push: (data, encoding) =>
 		@retries = 0 # we got some data, reset number of retries
 		@bytesRead += data.length if data?
 		@_reportProgress()
@@ -150,10 +150,10 @@ class ResumableRequest extends stream.Readable
 			@response = cloneResponse(response)
 			@destinations.forEach ([ dest, opts ]) =>
 				@response.pipe(dest, opts)
-			delete @destinations
+			@destinations = []
 			@emit('response', @response)
 
-		onData = @push.bind(this)
+		onData = @push
 		onEnd = ->
 			response.removeListener('data', onData)
 			response.removeListener('error', onEnd)
