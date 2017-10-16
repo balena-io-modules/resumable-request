@@ -21,9 +21,6 @@ cloneResponse = (response) ->
 		s[prop] = response[prop]
 	return s
 
-wrapLegacyStream = (s) ->
-	new stream.Readable().wrap(s)
-
 class ResumableRequest extends stream.Readable
 	constructor: (@requestModule, @requestOpts, opts = {}) ->
 		super()
@@ -31,6 +28,8 @@ class ResumableRequest extends stream.Readable
 		@error = null
 		@request = null
 		@response = null
+
+		@destinations = []
 
 		@bytesRead = 0
 		@bytesTotal = null
@@ -62,7 +61,14 @@ class ResumableRequest extends stream.Readable
 		@retries = 0 # we got some data, reset number of retries
 		@bytesRead += data.length if data?
 		@_reportProgress()
-		return super(data, encoding)
+		@emit('data', data)
+		return @response.write(data, encoding)
+
+	pipe: (dest, opts) ->
+		if @response?
+			return @response.pipe(dest, opts)
+		@destinations.push([ dest, opts ])
+		return dest
 
 	_destroy: (err, cb) ->
 		return cb(err) if @ended
@@ -73,22 +79,17 @@ class ResumableRequest extends stream.Readable
 			@request.abort()
 		else
 			@request.destroy()
-		doEnd = =>
-			@_retry.cancel()
-			@_reportProgress()
-			@_reportProgress.flush()
-			@_reportProgress.cancel()
-			cb(err)
-			# `cb(err)` will emit the error on next tick, so schedule emittance
-			# of 'end' on next tick as well to preserve event order.
-			process.nextTick =>
-				@emit('end')
-				if not err
-					@emit('complete')
-		if @response?
-			@response.end(doEnd)
-		else
-			doEnd()
+		@response?.end()
+		@_retry.cancel()
+		@_reportProgress()
+		@_reportProgress.flush()
+		@_reportProgress.cancel()
+		cb(err)
+		# `cb(err)` will emit the error on next tick, so schedule emittance
+		# of 'end' on next tick as well to preserve event order.
+		process.nextTick =>
+			@emit('complete') if not err
+			@emit('end')
 
 	_read: -> # noop -- we're manually pushing buffers into self
 
@@ -146,12 +147,21 @@ class ResumableRequest extends stream.Readable
 			@bytesTotal ?= parseInt(response.headers['content-length'])
 			@_reportProgress()
 			@_reportProgress.flush()
-			@response = cloneResponse(response).on('data', @push.bind(this))
+			@response = cloneResponse(response)
+			@destinations.forEach ([ dest, opts ]) =>
+				@response.pipe(dest, opts)
+			delete @destinations
 			@emit('response', @response)
 
-		# wrapping the stream in a v3 Readable stream streamlines the emission
-		# of some events and avoids some weird edge-cases
-		wrapLegacyStream(response).pipe(@response, end: false)
+		onData = @push.bind(this)
+		onEnd = ->
+			response.removeListener('data', onData)
+			response.removeListener('error', onEnd)
+			response.removeListener('end', onEnd)
+		response
+			.on('data', onData)
+			.once('error', onEnd)
+			.once('end', onEnd)
 
 	# Decide whether to resume downloading based on number
 	# of bytes downloaded and maximum retries.
