@@ -7,9 +7,9 @@
     "url": "https://github.com/resin-io-modules/resumable-request"
   },
   "scripts": {
-    "pretest": "./node_modules/.bin/resin-lint index.coffee test/",
-    "test": "./node_modules/.bin/mocha --compilers coffee:coffee-script/register",
-    "prepublish": "./node_modules/.bin/coffee -c index.coffee"
+    "pretest": "resin-lint index.coffee test/",
+    "test": "mocha --no-exit --compilers coffee:coffee-script/register",
+    "prepublish": "coffee -c index.coffee"
   },
   "dependencies": {
     "extend": "^3.0.1",

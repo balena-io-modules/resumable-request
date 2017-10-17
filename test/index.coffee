@@ -29,7 +29,7 @@ brokenServer = http.createServer (req, res) ->
 		opts.start = 0
 		opts.end = TEST_BROKEN_RESPONSE_SIZE - 1
 	qs = url.parse(req.url, true).query
-	if qs.hang?
+	if qs.hang? and req.headers.range?
 		return # hang forever; will cause socket timeout
 	if not qs.noContentLength?
 		res.setHeader('Content-length', TEST_FILE_LENGTH - opts.start)
@@ -38,8 +38,6 @@ brokenServer = http.createServer (req, res) ->
 	if qs.failAt? and opts.start >= qs.failAt <= opts.end
 		res.statusCode = 404
 	fs.createReadStream(TEST_FILE, opts).on 'data', (data) ->
-		if not data?
-			return # hang forever; will cause socket timeout
 		res.write data
 
 describe 'resumable', ->
