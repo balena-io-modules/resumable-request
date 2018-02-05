@@ -1,44 +1,97 @@
+EventEmitter = require 'events'
+request = require 'simple-get'
 stream = require 'readable-stream'
 throttle = require 'lodash.throttle'
 
-# use the same module as request.js, to preserve behaviour.
 # Object.assign() doesn't fit, because it copies `undefined`
 # props as well, whereas we'd rather not.
 extend = require 'extend'
 
-module.exports = (requestModule, requestOpts, opts) ->
-	return new ResumableRequest(requestModule, requestOpts, opts)
+module.exports = (opts) ->
+	return new ResumableRequest(opts)
 
 module.exports.defaults = (defaults = {}) ->
-	(requestModule, requestOpts, opts) ->
+	(opts) ->
 		opts = extend {}, defaults, opts
-		return new ResumableRequest(requestModule, requestOpts, opts)
+		return new ResumableRequest(opts)
 
-cloneResponse = (response) ->
-	# creates an `http.IncomingMessage`-like stream, that can also be piped to.
-	s = new stream.PassThrough()
-	[ 'headers', 'httpVersion', 'method', 'rawHeaders', 'statusCode', 'statusMessage' ].forEach (prop) ->
-		s[prop] = response[prop]
-	return s
-
-class ResumableRequest extends stream.Readable
-	constructor: (@requestModule, @requestOpts, opts = {}) ->
+class _ResponseProxy extends stream.Readable
+	constructor: (response, @timeout, @onProgress) ->
 		super()
+		@stream = response
+		[ 'headers', 'httpVersion', 'method', 'rawHeaders', 'statusCode', 'statusMessage' ].forEach (prop) =>
+			this[prop] = response[prop]
+		@_ended = false
+
+	follow: (response) ->
+		if @stream?
+			@stream.resume()
+			@stream.removeListener('readable', @_read)
+		@stream = response
+		@stream.once('readable', @_read)
+
+	_read: =>
+		return if @_ended
+
+		chunk = null
+		chunksRead = 0
+
+		# Read chunks from the source & push them out
+		while (chunk = @stream.read())
+			chunksRead++
+
+			@onProgress(chunk)
+
+			# Avoid pushing out more chunks than the destination can handle
+			if @push(chunk) is false
+				break
+
+		# If no chunks were read, wait until the source becomes readable again
+		if chunksRead is 0
+			@stream.once('readable', @_read)
+
+	_destroy: ->
+		@_ended = true
+		@push(null)
+		if @stream?
+			@stream.resume()
+			@stream.removeListener('readable', @_read)
+
+class ResumableRequest extends EventEmitter
+	constructor: (opts) ->
+		super()
+
+		if not opts.url?
+			throw new Error('You must specify a URL')
+		if opts.method? and opts.method.toLowerCase() isnt 'get'
+			throw new Error('Only GET requests are currently supported')
+
+		defaultOpts = {
+			maxRetries: 10
+			retryInterval: 1000
+			progressInterval: 1000
+		}
+
+		opts = extend(defaultOpts, opts)
+		{ @maxRetries, @timeout, retryInterval, progressInterval } = opts
+		delete opts.maxRetries
+		delete opts.retryInterval
+		delete opts.progressInterval
+		delete opts.timeout
 
 		@error = null
 		@request = null
 		@response = null
-
-		@destinations = []
+		@requestOpts = opts
+		@requestOpts.headers ?= {}
 
 		@bytesRead = 0
 		@bytesTotal = null
 		@retries = 0
-		@maxRetries = opts.maxRetries ? 10
 
-		retryNow = @_retry.bind(this)
-		@_retry = throttle(retryNow, opts.retryInterval ? 1000, leading: false)
-		@_reportProgress = throttle(@_reportProgress.bind(this), opts.progressInterval ? 1000, leading: false)
+		retryNow = @_retry
+		@_retry = throttle(retryNow, retryInterval, leading: false)
+		@_reportProgress = throttle(@_reportProgress, progressInterval, leading: false)
 
 		@on 'pipe', =>
 			# request can be written to when uploading a resource to a URL.
@@ -51,47 +104,7 @@ class ResumableRequest extends stream.Readable
 			# have to abort asynchronously to allow client code to register 'error' handlers
 			process.nextTick(retryNow)
 
-		@_request()
-
-	abort: ->
-		@emit('abort')
-		@destroy(@error)
-
-	push: (data, encoding) =>
-		@retries = 0 # we got some data, reset number of retries
-		@bytesRead += data.length if data?
-		@_reportProgress()
-		@emit('data', data)
-		return @response.write(data, encoding)
-
-	pipe: (dest, opts) ->
-		if @response?
-			return @response.pipe(dest, opts)
-		@destinations.push([ dest, opts ])
-		return dest
-
-	_destroy: (err, cb) ->
-		return cb(err) if @ended
-		@ended = true
-		# make sure to cleanly abort or detroy the underlying
-		# request as appropriate immediately.
-		if err
-			@request.abort()
-		else
-			@request.destroy()
-		@response?.end()
-		@_retry.cancel()
-		@_reportProgress()
-		@_reportProgress.flush()
-		@_reportProgress.cancel()
-		cb(err)
-		# `cb(err)` will emit the error on next tick, so schedule emittance
-		# of 'end' on next tick as well to preserve event order.
-		process.nextTick =>
-			@emit('complete') if not err
-			@emit('end')
-
-	_read: -> # noop -- we're manually pushing buffers into self
+		process.nextTick(@_request)
 
 	progress: ->
 		retries: @retries
@@ -102,12 +115,7 @@ class ResumableRequest extends stream.Readable
 	_reportProgress: (progress = {}) =>
 		@emit('progress', Object.assign(@progress(), progress))
 
-	# Sends the requests and sets up listeners in order
-	# to be able to resume.
-	# Returns a stream object similar to the result of `request`.
-	# 'response' and 'request' events on the stream are generated
-	# based on the first request, in order to emit them only once.
-	_request: ->
+	_request: =>
 		if @response?
 			# the first response is emitted to listeners, so only specify the
 			# Range header on subsequent requests, to avoid causing a 206 response
@@ -116,27 +124,36 @@ class ResumableRequest extends stream.Readable
 			@requestOpts.headers.range = "bytes=#{@bytesRead}-"
 
 		initial = @request is null
-		failed = false
 
-		@request = @requestModule(@requestOpts)
-		.once 'request', (reqObj) =>
-			if initial
-				@emit('request', reqObj)
-		.once 'response', (response) =>
+		reqFinished = false
+		resFinished = false
+		doRetry = =>
+			if reqFinished and resFinished
+				@_retry()
+
+		@request = request @requestOpts, (err, response) =>
+			if err?
+				resFinished = true
+				doRetry()
+				return
+
 			@_follow(response)
+
+			response.once 'end', ->
+				resFinished = true
+				doRetry()
+
 			if response.statusCode >= 400
 				@error = new Error("Request failed with status code #{response.statusCode}")
-				@_retry() # will abort the request
-		.on 'error', (err) =>
-			failed = true
-			@emit('socketError', err)
-			@_retry()
-		.once 'complete', =>
-			return if failed # we've already triggered a retry
-			if @bytesTotal? and @bytesRead < @bytesTotal
-				@_retry()
-			else
-				@destroy() # received complete response
+				@request.abort()
+		.once 'close', ->
+			reqFinished = true
+			doRetry()
+
+		if @timeout
+			@request.setTimeout(@timeout)
+
+		@emit('request', @request) if initial
 
 	_follow: (response) ->
 		if not @response?
@@ -147,25 +164,17 @@ class ResumableRequest extends stream.Readable
 			@bytesTotal ?= parseInt(response.headers['content-length'])
 			@_reportProgress()
 			@_reportProgress.flush()
-			@response = cloneResponse(response)
-			@destinations.forEach ([ dest, opts ]) =>
-				@response.pipe(dest, opts)
-			@destinations = []
+			@response = new _ResponseProxy response, @timeout, (data) =>
+				@retries = 0
+				@bytesRead += data.length
+				@_reportProgress()
 			@emit('response', @response)
-
-		onData = @push
-		onEnd = ->
-			response.removeListener('data', onData)
-			response.removeListener('error', onEnd)
-			response.removeListener('end', onEnd)
-		response
-			.on('data', onData)
-			.once('error', onEnd)
-			.once('end', onEnd)
+		else
+			@response.follow(response)
 
 	# Decide whether to resume downloading based on number
 	# of bytes downloaded and maximum retries.
-	_retry: ->
+	_retry: =>
 		return if @ended
 
 		if @error?
@@ -178,10 +187,34 @@ class ResumableRequest extends stream.Readable
 			@error = new Error('Received more bytes than expected!')
 		else if @retries >= @maxRetries
 			@error = new Error('Maximum retries exceeded')
+		else if @bytesTotal? and @bytesRead is @bytesTotal
+			@_end()
+			return
 		else
 			@retries += 1
 			@emit('retry', @progress())
 			@_request()
 			return
 
-		@abort()
+		@_abort(@error)
+
+	abort: ->
+		@request?.abort()
+
+	_abort: (err) ->
+		return if @ended
+		@ended = true
+
+		@response?.resume()
+		@response?.destroy()
+
+		if err?
+			@emit('error', err)
+		@emit('aborted')
+		@emit('end')
+
+	_end: ->
+		return if @ended
+		@ended = true
+		@response.destroy()
+		@emit('end')

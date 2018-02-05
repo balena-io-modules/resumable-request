@@ -14,7 +14,8 @@
   "dependencies": {
     "extend": "^3.0.1",
     "lodash.throttle": "^4.1.1",
-    "readable-stream": "^2.3.3"
+    "readable-stream": "^2.3.3",
+    "simple-get": "^2.7.0"
   },
   "devDependencies": {
     "chai": "~3.5.0",

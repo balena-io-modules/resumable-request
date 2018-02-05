@@ -7,8 +7,7 @@ stream = require 'readable-stream'
 
 # we're emulating a flaky connection by simply not sending data from the test
 # server down the socket. no need to wait for ages, so specify tiny timeouts.
-request = require('request').defaults(timeout: 100)
-resumable = require('../').defaults(retryInterval: 100, maxRetries: 2)
+resumable = require('../').defaults(timeout: 100, retryInterval: 100, maxRetries: 2)
 
 TEST_PORT = process.env.TEST_PORT ? 5000
 TEST_FILE = './test/test.html'
@@ -37,6 +36,7 @@ brokenServer = http.createServer (req, res) ->
 		res.setHeader('Accept-Ranges', 'Bytes')
 	if qs.failAt? and opts.start >= qs.failAt <= opts.end
 		res.statusCode = 404
+		return res.end()
 	fs.createReadStream(TEST_FILE, opts).on 'data', (data) ->
 		res.write data
 
@@ -54,29 +54,22 @@ describe 'resumable', ->
 
 	it 'should stream the whole response', (done) ->
 		chunks = []
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
-		.on 'data', (data) ->
-			chunks.push(data)
-		.on 'end', ->
-			expect(Buffer.concat(chunks)).to.eql(fs.readFileSync(TEST_FILE))
-			done()
-
-	it 'should stream the inner response', (done) ->
-		chunks = []
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
+		resumable(url: "http://localhost:#{TEST_PORT}/")
 		.on 'response', (response) ->
 			response
 			.on 'data', (data) ->
 				chunks.push(data)
-		.on 'end', ->
-			expect(Buffer.concat(chunks)).to.eql(fs.readFileSync(TEST_FILE))
-			done()
+			.on 'end', ->
+				expect(Buffer.concat(chunks)).to.eql(fs.readFileSync(TEST_FILE))
+				done()
 
 	it 'should pipe the whole response', (done) ->
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
-		.pipe(fs.createWriteStream('/dev/null'))
-		.on 'close', ->
-			done()
+		resumable(url: "http://localhost:#{TEST_PORT}/")
+		.on 'response', (response) ->
+			response
+			.pipe(fs.createWriteStream('/dev/null'))
+			.on 'close', ->
+				done()
 
 	expectError = (str, done, fn) ->
 		error = null
@@ -90,27 +83,27 @@ describe 'resumable', ->
 	it 'should fail if treated as writable stream', (done) ->
 		expectError 'ResumableRequest is not writable', done, ->
 			fs.createReadStream(TEST_FILE)
-			.pipe(resumable(request, { url: "http://localhost:#{TEST_PORT}/" }))
+			.pipe(resumable(url: "http://localhost:#{TEST_PORT}/"))
 
 	it 'should fail if maxRetries are exceeded', (done) ->
 		expectError 'Maximum retries exceeded', done, ->
-			resumable(request, { url: "http://localhost:#{TEST_PORT}/?hang=1" })
+			resumable(url: "http://localhost:#{TEST_PORT}/?hang=1")
 
 	it 'should fail if no content-length is emitted', (done) ->
 		expectError 'Cannot resume without Content-Length response header', done, ->
-			resumable(request, { url: "http://localhost:#{TEST_PORT}/?noContentLength=1" })
+			resumable(url: "http://localhost:#{TEST_PORT}/?noContentLength=1")
 
 	it 'should fail if no accept-ranges is emitted', (done) ->
 		expectError 'Server does not support Byte Serving', done, ->
-			resumable(request, { url: "http://localhost:#{TEST_PORT}/?noByteServing=1" })
+			resumable(url: "http://localhost:#{TEST_PORT}/?noByteServing=1")
 
 	it 'should fail if some of the resumed requests return status code >= 400', (done) ->
 		expectError 'Request failed with status code 404', done, ->
-			resumable(request, { url: "http://localhost:#{TEST_PORT}/?failAt=#{TEST_FILE_LENGTH / 2}" })
+			resumable(url: "http://localhost:#{TEST_PORT}/?failAt=#{TEST_FILE_LENGTH / 2}")
 
 	it 'should emit one "request" event', (done) ->
 		requestEvents = []
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
+		resumable(url: "http://localhost:#{TEST_PORT}/")
 		.on 'request', (req) ->
 			requestEvents.push(req)
 		.on 'error', (e) ->
@@ -122,7 +115,7 @@ describe 'resumable', ->
 
 	it 'should emit one "response" event', (done) ->
 		responseEvents = []
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/" })
+		resumable(url: "http://localhost:#{TEST_PORT}/")
 		.on 'response', (res) ->
 			responseEvents.push(res)
 		.on 'error', (e) ->
@@ -136,7 +129,7 @@ describe 'resumable', ->
 
 	it 'should report progress', (done) ->
 		progressEvents = []
-		resumable(request, { url: "http://localhost:#{TEST_PORT}/" }, { progressInterval: 10 })
+		resumable(url: "http://localhost:#{TEST_PORT}/", progressInterval: 10)
 		.on 'progress', (prog) ->
 			progressEvents.push(prog)
 		.on 'end', ->
