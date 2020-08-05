@@ -1,7 +1,7 @@
 EventEmitter = require 'events'
 request = require 'simple-get'
 stream = require 'readable-stream'
-throttle = require 'lodash.throttle'
+throttle = require 'lodash/throttle'
 
 # Object.assign() doesn't fit, because it copies `undefined`
 # props as well, whereas we'd rather not.
