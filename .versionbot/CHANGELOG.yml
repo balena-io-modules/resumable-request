@@ -1,133 +1,183 @@
 - commits:
-  - author: Akis Kesoglou
-    body: ""
-    footers:
-      change-type: major
-    hash: aeabc08ef6093dcbc3bf779cc473cedab6487b05
-    subject: Handle back-pressure
-  date: "2018-02-05T08:56:10Z"
+    - subject: Add .versionbot/CHANGELOG.yml for nested changelogs
+      hash: e11bf1fd3f505a83eb1c0bd872d3a90ee1ba4137
+      body: ''
+      footer:
+        Change-type: patch
+        change-type: patch
+      author: Pagan Gazzard
+    - subject: Optimize lodash dependency
+      hash: 40146b216300b0b16f7004e8266d16696928ea14
+      body: ''
+      footer:
+        Change-type: patch
+        change-type: patch
+      author: Pagan Gazzard
+  version: 2.0.1
+  date: 2020-08-05T09:48:49.433Z
+- commits:
+    - author: Akis Kesoglou
+      body: ''
+      footers:
+        change-type: major
+      hash: aeabc08ef6093dcbc3bf779cc473cedab6487b05
+      subject: Handle back-pressure
+  date: '2018-02-05T08:56:10Z'
   version: 2.0.0
 - commits:
-  - author: Akis Kesoglou
-    body: |-
-      - Improved the test server to hang in subsequent requests
-      - Removed a redundant check
-    hash: a9f9c38f1f33077eb720b9b25b2182bb105f5f6f
-    subject: Minor improvements
-  - author: Akis Kesoglou
-    body: |-
-      Before this change, the response would not be gracefully termnated if there was something on the reader side prevented the flow of the stream.
-      This also fixes an issue where the whole response would accidentally be buffered inside `ResumableRequest` unless it was consumed as well.
-    hash: 2679758d4866ee0beccd687ceaea1ad830f89ae9
-    subject: Refactor the way the response is forwarded
-  - author: Akis Kesoglou
-    body: ""
-    hash: e4542c4459575e769963f0e72da631a2aeb68c51
-    subject: Address review feedback
-  date: "2017-10-17T07:09:14Z"
+    - author: Akis Kesoglou
+      body: |-
+        - Improved the test server to hang in subsequent requests
+        - Removed a redundant check
+      hash: a9f9c38f1f33077eb720b9b25b2182bb105f5f6f
+      subject: Minor improvements
+    - author: Akis Kesoglou
+      body: >-
+        Before this change, the response would not be gracefully termnated if
+        there was something on the reader side prevented the flow of the stream.
+
+        This also fixes an issue where the whole response would accidentally be
+        buffered inside `ResumableRequest` unless it was consumed as well.
+      hash: 2679758d4866ee0beccd687ceaea1ad830f89ae9
+      subject: Refactor the way the response is forwarded
+    - author: Akis Kesoglou
+      body: ''
+      hash: e4542c4459575e769963f0e72da631a2aeb68c51
+      subject: Address review feedback
+  date: '2017-10-17T07:09:14Z'
   version: 1.0.1
 - commits:
-  - author: Akis Kesoglou
-    body: |-
-      This makes the following fixes and improvements:
-      - Consumers now will properly receive data even if subscribing to the response instead of the returned stream
-      - Resume now works even if the initial request fails
-      - Resumable is now itself a Readable stream and consumers work with it instead of a proxy transform stream
-      - Added a way to produce a factory with default options applied to every subsequent use
-      - Now only tries to resume if the server makes known it support range requests via an Accept-Ranges header
-      - Now raises an exception as soon as client code tries to pipe into the resumable instance
-      - Now resets the retry count as soon as bytes manage to get through
-      - Added ability to report progress via a new ‘progress’ event sent in a customisable interval
-      - Now makes sure it doesn’t cause the server to respond with status 206
-      - An ‘end’ event is now always emitted
-      - Streamlined the internal API a bit, by renaming methods
-      - Improved the test server to cause actual socket errors for somewhat more realistic testing
-      - Added a couple more tests and improved some others
-    hash: 09f5a2e13d5e2195beb9614a2d28aee4dc828876
-    subject: Improved resumable
-  - author: Akis Kesoglou
-    body: ""
-    hash: 12571435aeccd56838cb073d1143d8dbb1615afe
-    subject: Replaced custom `throttle` function with lodash’s
-  - author: Akis Kesoglou
-    body: ""
-    hash: 32a763ed3dabd710bc0a593e8026c13ba08453a2
-    subject: Do not throw an exception on pipe; emit an error instead
-  - author: Akis Kesoglou
-    body: ""
-    hash: 2c14c5e831a6de6c1859c891ab94e3747dd4e072
-    subject: Rewritten `_retry` method to use if/else for clarity
-  - author: Akis Kesoglou
-    body: ""
-    hash: cf9507670aac420ae10b2f86b78804513642286e
-    subject: Implement `_destroy` for better compliance with stream API
-  - author: Akis Kesoglou
-    body: ""
-    hash: 9c36a221f1533f121b7998df5beda714799b8ecf
-    subject: Properly indent code examples in README
-  - author: Akis Kesoglou
-    body: request.js specially handles timeouts and calls abort, but for all other
-      errors it doesn’t, which means we must unconditionally trigger a retry on error.
-    hash: 9d67a2605ce8cb237ded76185ada5e7b57647d93
-    subject: Make sure we retry on all errors
-  - author: Akis Kesoglou
-    body: This makes sure the underlying request is either aborted or destroyed as
-      appropriate, and doesn’t swallow the error, if there’s any, but let’s the native
-      stream implementation emit/handle it instead.
-    hash: 863e2a018bac555352b9218294bb0ddfd1435047
-    subject: Improve termination
-  - author: Akis Kesoglou
-    body: |-
-      lodash.throttle invokes the throttled function *both* on the leading and trailing edge of the specified time window by default which means we’d retry *twice* :/
-      This makes the throttled retry function to properly behave, by invoking the function once, after waiting the specified amount of time.
-      Also applied a similar fix for the reportProgress function.
-    hash: 1320336e8430908977056dc8eb44aaba37bff439
-    subject: Improved retry logic
-  - author: Akis Kesoglou
-    body: ""
-    hash: 06fe21d82825ed2dccd129b17344df1d88d2e0e4
-    subject: Make sure we immediately retry to end the stream
-  - author: Akis Kesoglou
-    body: ""
-    hash: f35297abfa2782000ddbab8c9ba7c281acfaf8e9
-    subject: Address review feedback
-  - author: Akis Kesoglou
-    body: This module is already installed and used by request.js. The main “feature”
-      we want from it (and Object.assign don’t fit) is to not copy properties that
-      resolve to `undefined`.
-    hash: 6a9a45bf04899327e1af2b4843418e598a70b1eb
-    subject: Use `extend` to merge defaults
-  date: "2017-08-07T13:49:30Z"
+    - author: Akis Kesoglou
+      body: >-
+        This makes the following fixes and improvements:
+
+        - Consumers now will properly receive data even if subscribing to the
+        response instead of the returned stream
+
+        - Resume now works even if the initial request fails
+
+        - Resumable is now itself a Readable stream and consumers work with it
+        instead of a proxy transform stream
+
+        - Added a way to produce a factory with default options applied to every
+        subsequent use
+
+        - Now only tries to resume if the server makes known it support range
+        requests via an Accept-Ranges header
+
+        - Now raises an exception as soon as client code tries to pipe into the
+        resumable instance
+
+        - Now resets the retry count as soon as bytes manage to get through
+
+        - Added ability to report progress via a new ‘progress’ event sent in a
+        customisable interval
+
+        - Now makes sure it doesn’t cause the server to respond with status 206
+
+        - An ‘end’ event is now always emitted
+
+        - Streamlined the internal API a bit, by renaming methods
+
+        - Improved the test server to cause actual socket errors for somewhat
+        more realistic testing
+
+        - Added a couple more tests and improved some others
+      hash: 09f5a2e13d5e2195beb9614a2d28aee4dc828876
+      subject: Improved resumable
+    - author: Akis Kesoglou
+      body: ''
+      hash: 12571435aeccd56838cb073d1143d8dbb1615afe
+      subject: Replaced custom `throttle` function with lodash’s
+    - author: Akis Kesoglou
+      body: ''
+      hash: 32a763ed3dabd710bc0a593e8026c13ba08453a2
+      subject: Do not throw an exception on pipe; emit an error instead
+    - author: Akis Kesoglou
+      body: ''
+      hash: 2c14c5e831a6de6c1859c891ab94e3747dd4e072
+      subject: Rewritten `_retry` method to use if/else for clarity
+    - author: Akis Kesoglou
+      body: ''
+      hash: cf9507670aac420ae10b2f86b78804513642286e
+      subject: Implement `_destroy` for better compliance with stream API
+    - author: Akis Kesoglou
+      body: ''
+      hash: 9c36a221f1533f121b7998df5beda714799b8ecf
+      subject: Properly indent code examples in README
+    - author: Akis Kesoglou
+      body: >-
+        request.js specially handles timeouts and calls abort, but for all other
+        errors it doesn’t, which means we must unconditionally trigger a retry
+        on error.
+      hash: 9d67a2605ce8cb237ded76185ada5e7b57647d93
+      subject: Make sure we retry on all errors
+    - author: Akis Kesoglou
+      body: >-
+        This makes sure the underlying request is either aborted or destroyed as
+        appropriate, and doesn’t swallow the error, if there’s any, but let’s
+        the native stream implementation emit/handle it instead.
+      hash: 863e2a018bac555352b9218294bb0ddfd1435047
+      subject: Improve termination
+    - author: Akis Kesoglou
+      body: >-
+        lodash.throttle invokes the throttled function *both* on the leading and
+        trailing edge of the specified time window by default which means we’d
+        retry *twice* :/
+
+        This makes the throttled retry function to properly behave, by invoking
+        the function once, after waiting the specified amount of time.
+
+        Also applied a similar fix for the reportProgress function.
+      hash: 1320336e8430908977056dc8eb44aaba37bff439
+      subject: Improved retry logic
+    - author: Akis Kesoglou
+      body: ''
+      hash: 06fe21d82825ed2dccd129b17344df1d88d2e0e4
+      subject: Make sure we immediately retry to end the stream
+    - author: Akis Kesoglou
+      body: ''
+      hash: f35297abfa2782000ddbab8c9ba7c281acfaf8e9
+      subject: Address review feedback
+    - author: Akis Kesoglou
+      body: >-
+        This module is already installed and used by request.js. The main
+        “feature” we want from it (and Object.assign don’t fit) is to not copy
+        properties that resolve to `undefined`.
+      hash: 6a9a45bf04899327e1af2b4843418e598a70b1eb
+      subject: Use `extend` to merge defaults
+  date: '2017-08-07T13:49:30Z'
   version: 1.0.0
 - commits:
-  - author: Alexios Theodoros Brezas
-    body: ""
-    hash: 1e9c540b3cbd67e16223a81c7220bb497adc4f9c
-    subject: first implementation
-  - author: Alexios Theodoros Brezas
-    body: ""
-    hash: 68cde5c698b179ac3bc34e9bdb2e7453ac200040
-    subject: use a requestmodule option to avoid depending on specific version of
-      request, and use first request for headers
-  - author: Alexios Theodoros Brezas
-    body: ""
-    hash: a8715859df28ec6478182874f661f0bc4ab6e084
-    subject: implement it as a class for improved clarity
-  - author: Alexios Theodoros Brezas
-    body: ""
-    hash: b8f0c8c2dd45ea2463a18c8983f8f53af7e2a1a9
-    subject: error messages always first uppercase
-  - author: Alexios Theodoros Brezas
-    body: ""
-    hash: 8e23cac2a80c99985420ac1add0e1671eb3f125a
-    subject: add test cases for events and fail conditions
-  - author: Alexios Theodoros Brezas
-    body: ""
-    hash: 8e933a731b456d1c9aa0ca5ef9f2ea409dc371e4
-    subject: remove unnecessary writing to /dev/null
-  - author: Alexios Theodoros Brezas
-    body: ""
-    hash: 285d51b338ac1caa73e80d510ba5061a29c7743f
-    subject: switch packages to using ~ instead of ^
-  date: "2016-08-11T17:00:24Z"
+    - author: Alexios Theodoros Brezas
+      body: ''
+      hash: 1e9c540b3cbd67e16223a81c7220bb497adc4f9c
+      subject: first implementation
+    - author: Alexios Theodoros Brezas
+      body: ''
+      hash: 68cde5c698b179ac3bc34e9bdb2e7453ac200040
+      subject: >-
+        use a requestmodule option to avoid depending on specific version of
+        request, and use first request for headers
+    - author: Alexios Theodoros Brezas
+      body: ''
+      hash: a8715859df28ec6478182874f661f0bc4ab6e084
+      subject: implement it as a class for improved clarity
+    - author: Alexios Theodoros Brezas
+      body: ''
+      hash: b8f0c8c2dd45ea2463a18c8983f8f53af7e2a1a9
+      subject: error messages always first uppercase
+    - author: Alexios Theodoros Brezas
+      body: ''
+      hash: 8e23cac2a80c99985420ac1add0e1671eb3f125a
+      subject: add test cases for events and fail conditions
+    - author: Alexios Theodoros Brezas
+      body: ''
+      hash: 8e933a731b456d1c9aa0ca5ef9f2ea409dc371e4
+      subject: remove unnecessary writing to /dev/null
+    - author: Alexios Theodoros Brezas
+      body: ''
+      hash: 285d51b338ac1caa73e80d510ba5061a29c7743f
+      subject: switch packages to using ~ instead of ^
+  date: '2016-08-11T17:00:24Z'
   version: 0.0.1
